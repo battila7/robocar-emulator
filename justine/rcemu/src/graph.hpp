@@ -32,20 +32,20 @@ public:
 	Graph(const char* shm_segment)
 	{
 		segment = new boost::interprocess::managed_shared_memory (boost::interprocess::open_only, shm_segment);
-     	shm_map = segment->find<justine::robocar::shm_map_Type> ("JustineMap").first;
+     	shm_map = segment->find<justine::robocar::SharedMap> ("JustineMap").first;
      	BuildGraph();
 	}
 	~Graph()
 	{
-		delete nrg;	
+		delete nrg;
 	}
 
 	GraphNodeID palist ( GraphNodeID from, int to ) const;
 	void BuildGraph(void);
-	
+
 
 	NodeRefGraph* nrg;
-	boost::interprocess::offset_ptr<justine::robocar::shm_map_Type> shm_map;
+	boost::interprocess::offset_ptr<justine::robocar::SharedMap> shm_map;
    	boost::interprocess::managed_shared_memory *segment;
 	std::map<GraphNodeID, NRGVertex> nr2v;
 };

@@ -103,12 +103,13 @@ public:
               << "... " << std::endl;
     #endif
 
+    std::cout << connnectivitySettings.shmName.c_str() << std::endl;
+
     shm_segment_ = new boost::interprocess::managed_shared_memory(
-      boost::interprocess::open_only,
-      connnectivitySettings.shmName.c_str());
+      boost::interprocess::open_only, connnectivitySettings.shmName.c_str());
 
     shm_map_ =
-      shm_segment_->find<shm_map_Type>("JustineMap").first;
+      shm_segment_->find<SharedMap>("JustineMap").first;
 
     running_time_elapsed_ = 0;
 
@@ -146,7 +147,7 @@ public:
     is_running_ = false;
 
     m_thread.join();
-    shm_segment_->destroy<shm_map_Type>("JustineMap");
+    shm_segment_->destroy<SharedMap>("JustineMap");
 
     delete shm_segment_;
   }
@@ -300,8 +301,8 @@ public:
 protected:
   bool is_running_;
 
-  boost::interprocess::managed_shared_memory *shm_segment_;
-  boost::interprocess::offset_ptr<shm_map_Type> shm_map_;
+  boost::interprocess::managed_shared_memory* shm_segment_;
+  boost::interprocess::offset_ptr<SharedMap> shm_map_;
 
 private:
   struct ConnnectivitySettings

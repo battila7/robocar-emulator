@@ -127,8 +127,8 @@ void justine::robocar::Car::step()
   }
 }
 
-justine::robocar::AdjacencyList justine::robocar::AntCar::alist;
-justine::robocar::AdjacencyList justine::robocar::AntCar::alist_evaporate;
+justine::robocar::NodeAdjacencyMap justine::robocar::AntCar::alist;
+justine::robocar::NodeAdjacencyMap justine::robocar::AntCar::alist_evaporate;
 
 justine::robocar::AntCar::AntCar (
   justine::robocar::Traffic & traffic ) : justine::robocar::Car ( traffic )
@@ -138,9 +138,9 @@ justine::robocar::AntCar::AntCar (
 
 osmium::unsigned_object_id_type justine::robocar::AntCar::ant ( void )
 {
-  AdjacencyList::iterator iter= AntCar::alist.find ( m_from );
+  NodeAdjacencyMap::iterator iter= AntCar::alist.find ( m_from );
 
-  WayNodesVect::iterator i = std::max_element ( iter->second.begin(), iter->second.end() );
+  OsmiumObjIdVector::iterator i = std::max_element ( iter->second.begin(), iter->second.end() );
 
   osmium::unsigned_object_id_type next_m_to = std::distance ( iter->second.begin(), i );
 
@@ -151,7 +151,7 @@ osmium::unsigned_object_id_type justine::robocar::AntCar::ant ( void )
 
 osmium::unsigned_object_id_type justine::robocar::AntCar::ant_rnd ( void )
 {
-  AdjacencyList::iterator iter= AntCar::alist.find ( m_from );
+  NodeAdjacencyMap::iterator iter= AntCar::alist.find ( m_from );
 
   int sum = std::accumulate ( iter->second.begin(), iter->second.end(), 0 );
 
@@ -159,7 +159,7 @@ osmium::unsigned_object_id_type justine::robocar::AntCar::ant_rnd ( void )
 
   int sum2 = 0;
 
-  WayNodesVect::iterator j=iter->second.begin();
+  OsmiumObjIdVector::iterator j=iter->second.begin();
   for ( ; j!= iter->second.end(); ++j )
   {
     sum2 += *j;
@@ -177,9 +177,9 @@ osmium::unsigned_object_id_type justine::robocar::AntCar::ant_rnd ( void )
 
 osmium::unsigned_object_id_type justine::robocar::AntCar::ant_rernd ( void )
 {
-  AdjacencyList::iterator iter= AntCar::alist.find ( m_from );
+  NodeAdjacencyMap::iterator iter= AntCar::alist.find ( m_from );
 
-  WayNodesVect cpv = iter->second;
+  OsmiumObjIdVector cpv = iter->second;
 
   int sum = std::accumulate ( cpv.begin(), cpv.end(), 0 );
 
@@ -194,7 +194,7 @@ osmium::unsigned_object_id_type justine::robocar::AntCar::ant_rernd ( void )
 
   int sum2 = 0;
 
-  WayNodesVect::iterator j=cpv.begin();
+  OsmiumObjIdVector::iterator j=cpv.begin();
   for ( ; j!= cpv.end(); ++j )
   {
     sum2 += *j;
@@ -212,10 +212,10 @@ osmium::unsigned_object_id_type justine::robocar::AntCar::ant_rernd ( void )
 
 osmium::unsigned_object_id_type justine::robocar::AntCar::ant_mrernd ( void )
 {
-  AdjacencyList::iterator iter = AntCar::alist.find ( m_from );
-  AdjacencyList::iterator iter2 = AntCar::alist_evaporate.find ( m_from );
+  NodeAdjacencyMap::iterator iter = AntCar::alist.find ( m_from );
+  NodeAdjacencyMap::iterator iter2 = AntCar::alist_evaporate.find ( m_from );
 
-  for ( WayNodesVect::iterator j=iter->second.begin(); j!= iter->second.end(); ++j )
+  for ( OsmiumObjIdVector::iterator j=iter->second.begin(); j!= iter->second.end(); ++j )
   {
       int del = traffic.get_time() -
                 iter2->second[std::distance ( iter->second.begin(), j )];
@@ -228,7 +228,7 @@ osmium::unsigned_object_id_type justine::robocar::AntCar::ant_mrernd ( void )
         *j = 1;
   }
 
-  WayNodesVect cpv = iter->second;
+  OsmiumObjIdVector cpv = iter->second;
 
   int sum = std::accumulate ( cpv.begin(), cpv.end(), 0 );
 
@@ -243,7 +243,7 @@ osmium::unsigned_object_id_type justine::robocar::AntCar::ant_mrernd ( void )
 
   int sum2 = 0;
 
-  WayNodesVect::iterator j=cpv.begin();
+  OsmiumObjIdVector::iterator j=cpv.begin();
   for ( ; j!= cpv.end(); ++j )
   {
     sum2 += *j;
@@ -320,8 +320,8 @@ void justine::robocar::AntCar::nextSmarterEdge ( void )
   }
 }
 
-justine::robocar::AdjacencyList justine::robocar::Pedestrian::plist;
-justine::robocar::AdjacencyList justine::robocar::Pedestrian::plist_evaporate;
+justine::robocar::NodeAdjacencyMap justine::robocar::Pedestrian::plist;
+justine::robocar::NodeAdjacencyMap justine::robocar::Pedestrian::plist_evaporate;
 
 justine::robocar::Pedestrian::Pedestrian (
   justine::robocar::Traffic & traffic ) : justine::robocar::Car ( traffic )
@@ -331,9 +331,9 @@ justine::robocar::Pedestrian::Pedestrian (
 
 osmium::unsigned_object_id_type justine::robocar::Pedestrian::ped ( void )
 {
-  AdjacencyList::iterator iter= Pedestrian::plist.find ( m_from );
+  NodeAdjacencyMap::iterator iter= Pedestrian::plist.find ( m_from );
 
-  WayNodesVect::iterator i = std::max_element ( iter->second.begin(), iter->second.end() );
+  OsmiumObjIdVector::iterator i = std::max_element ( iter->second.begin(), iter->second.end() );
 
   osmium::unsigned_object_id_type next_m_to = std::distance ( iter->second.begin(), i );
 
@@ -344,7 +344,7 @@ osmium::unsigned_object_id_type justine::robocar::Pedestrian::ped ( void )
 
 osmium::unsigned_object_id_type justine::robocar::Pedestrian::ped_rnd ( void )
 {
-  AdjacencyList::iterator iter= Pedestrian::plist.find ( m_from );
+  NodeAdjacencyMap::iterator iter= Pedestrian::plist.find ( m_from );
 
   int sum = std::accumulate ( iter->second.begin(), iter->second.end(), 0 );
 
@@ -352,7 +352,7 @@ osmium::unsigned_object_id_type justine::robocar::Pedestrian::ped_rnd ( void )
 
   int sum2 = 0;
 
-  WayNodesVect::iterator j=iter->second.begin();
+  OsmiumObjIdVector::iterator j=iter->second.begin();
   for ( ; j!= iter->second.end(); ++j )
   {
     sum2 += *j;
@@ -370,9 +370,9 @@ osmium::unsigned_object_id_type justine::robocar::Pedestrian::ped_rnd ( void )
 
 osmium::unsigned_object_id_type justine::robocar::Pedestrian::ped_rernd ( void )
 {
-  AdjacencyList::iterator iter= Pedestrian::plist.find ( m_from );
+  NodeAdjacencyMap::iterator iter= Pedestrian::plist.find ( m_from );
 
-  WayNodesVect cpv = iter->second;
+  OsmiumObjIdVector cpv = iter->second;
 
   int sum = std::accumulate ( cpv.begin(), cpv.end(), 0 );
 
@@ -387,7 +387,7 @@ osmium::unsigned_object_id_type justine::robocar::Pedestrian::ped_rernd ( void )
 
   int sum2 = 0;
 
-  WayNodesVect::iterator j=cpv.begin();
+  OsmiumObjIdVector::iterator j=cpv.begin();
   for ( ; j!= cpv.end(); ++j )
   {
     sum2 += *j;
@@ -405,10 +405,10 @@ osmium::unsigned_object_id_type justine::robocar::Pedestrian::ped_rernd ( void )
 
 osmium::unsigned_object_id_type justine::robocar::Pedestrian::ped_mrernd ( void )
 {
-  AdjacencyList::iterator iter = Pedestrian::plist.find ( m_from );
-  AdjacencyList::iterator iter2 = Pedestrian::plist_evaporate.find ( m_from );
+  NodeAdjacencyMap::iterator iter = Pedestrian::plist.find ( m_from );
+  NodeAdjacencyMap::iterator iter2 = Pedestrian::plist_evaporate.find ( m_from );
 
-  for ( WayNodesVect::iterator j=iter->second.begin(); j!= iter->second.end(); ++j )
+  for ( OsmiumObjIdVector::iterator j=iter->second.begin(); j!= iter->second.end(); ++j )
   {
       int del = traffic.get_time() -
                 iter2->second[std::distance ( iter->second.begin(), j )];
@@ -421,7 +421,7 @@ osmium::unsigned_object_id_type justine::robocar::Pedestrian::ped_mrernd ( void 
         *j = 1;
   }
 
-  WayNodesVect cpv = iter->second;
+  OsmiumObjIdVector cpv = iter->second;
 
   int sum = std::accumulate ( cpv.begin(), cpv.end(), 0 );
 
@@ -436,7 +436,7 @@ osmium::unsigned_object_id_type justine::robocar::Pedestrian::ped_mrernd ( void 
 
   int sum2 = 0;
 
-  WayNodesVect::iterator j=cpv.begin();
+  OsmiumObjIdVector::iterator j=cpv.begin();
   for ( ; j!= cpv.end(); ++j )
   {
     sum2 += *j;

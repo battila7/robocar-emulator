@@ -32,6 +32,16 @@
  *
  */
 
+#include <iostream>
+#include <map>
+#include <set>
+#include <vector>
+#include <string>
+#include <algorithm>
+#include <fstream>
+#include <exception>
+#include <stdexcept>
+
 #include <osmium/io/any_input.hpp>
 #include <osmium/handler.hpp>
 #include <osmium/visitor.hpp>
@@ -43,279 +53,279 @@
 #include <osmium/handler/node_locations_for_ways.hpp>
 #include <osmium/geom/haversine.hpp>
 #include <osmium/geom/coordinates.hpp>
-#include <iostream>
-#include <map>
-#include <set>
-#include <vector>
-#include <string>
-#include <algorithm>
-#include <fstream>
-
-#include <exception>
-#include <stdexcept>
 
 namespace justine
 {
+
 namespace robocar
 {
-typedef osmium::index::map::SparseMemMap<osmium::unsigned_object_id_type, osmium::Location> OSMLocations;
 
-typedef std::vector<osmium::unsigned_object_id_type> WayNodesVect;
-typedef std::map<std::string, WayNodesVect> WayNodesMap;
+using OSMLocations =
+  osmium::index::map::SparseMemMap<osmium::unsigned_object_id_type, osmium::Location>;
+
+using OsmiumObjIdVector = std::vector<osmium::unsigned_object_id_type>;
+
+using NodeToLocationMap = std::map<osmium::unsigned_object_id_type, osmium::Location>;
+using WayNodesMap = std::map<std::string, OsmiumObjIdVector>;
 //typedef osmium::index::map::StlMap<osmium::unsigned_object_id_type, osmium::Location> WaynodeLocations;
-typedef std::map<osmium::unsigned_object_id_type, osmium::Location> WaynodeLocations;
-typedef std::map<osmium::unsigned_object_id_type, WayNodesVect> Way2Nodes;
+using WayToNodeMap = std::map<osmium::unsigned_object_id_type, OsmiumObjIdVector>;
+using NodeAdjacencyMap = std::map<osmium::unsigned_object_id_type, OsmiumObjIdVector>;
 
-typedef std::map<osmium::unsigned_object_id_type, WayNodesVect> AdjacencyList;
-typedef osmium::index::map::SparseMemMap<osmium::unsigned_object_id_type, int > Vertices;
-
+// Thanks to this inheritance we have "callbacks" to
+// the most important OSM data types: Node, Way, Relation
 class OSMReader : public osmium::handler::Handler
 {
 public:
-  OSMReader ( const char * osm_file,
-              AdjacencyList & alist,
-              AdjacencyList & palist,
-              WaynodeLocations & waynode_locations,
-              WayNodesMap & busWayNodesMap,
-              Way2Nodes & way2nodes ) : alist ( alist ),
-    palist ( palist ),
-    waynode_locations ( waynode_locations ),
-    busWayNodesMap ( busWayNodesMap ),
-    way2nodes ( way2nodes )
+  OSMReader (const char* osmFile,
+             NodeAdjacencyMap& nodeAdjacencyMap,
+             NodeAdjacencyMap& palist,
+             NodeToLocationMap& wayNodeLocations,
+             WayToNodeMap& busWayMap,
+             WayToNodeMap& wayToNode):
+    nodeAdjacencyMap(nodeAdjacencyMap),
+    palist(palist),
+    wayNodeLocations(wayNodeLocations),
+    busWayMap(busWayMap),
+    wayToNode(wayToNode)
   {
-
-    try
-      {
-
-#ifdef DEBUG
-        std::cout << "\n OSMReader is running... " << std::endl;
-#endif
-
-        osmium::io::File infile ( osm_file );
-        osmium::io::Reader reader ( infile, osmium::osm_entity_bits::all );
-
-        using SparseLocations = osmium::index::map::SparseMemMap<osmium::unsigned_object_id_type, osmium::Location>;
-        osmium::handler::NodeLocationsForWays<SparseLocations> node_locations ( locations );
-
-        osmium::apply ( reader, node_locations, *this );
-        reader.close();
-
-#ifdef DEBUG
-        std::cout << " #OSM Nodes: " << nOSM_nodes << "\n";
-        std::cout << " #OSM Highways: " << nOSM_ways << "\n";
-        std::cout << " #Kms (Total length of highways) = " << sum_highhway_length/1000.0 << std::endl;
-        std::cout << " #OSM Relations: " << nOSM_relations << "\n";
-        std::cout << " #Highway Nodes: " << sum_highhway_nodes << "\n";
-        std::cout << " #Unique Highway Nodes: " << sum_unique_highhway_nodes << "\n";
-        std::cout << " E= (#Highway Nodes - #OSM Highways): " << sum_highhway_nodes - nOSM_ways << "\n";
-        std::cout << " V= (#Unique Highway Nodes):" << sum_unique_highhway_nodes << "\n";
-        std::cout << " V^2/E= "
-                  <<
-                  ( ( long ) sum_unique_highhway_nodes * ( long ) sum_unique_highhway_nodes )
-                  / ( double ) ( sum_highhway_nodes - nOSM_ways )
-                  << "\n";
-        std::cout << " Edge_multiplicity: " << edge_multiplicity << std::endl;
-        std::cout << " max edle length: " << max_edge_length << std::endl;
-        std::cout << " edle length mean: " << mean_edge_length/cedges << std::endl;
-        std::cout << " cedges: " << cedges << std::endl;
-
-        std::cout << " #Buses = " << busWayNodesMap.size() << std::endl;
-
-        std::cout << " Node locations " << locations.used_memory() /1024.0/1024.0 << " Mbytes" << std::endl;
-        //std::cout << " Waynode locations " << waynode_locations.used_memory() /1024.0/1024.0 << " Mbytes" << std::endl;
-        std::cout << " Vertices " << vert.used_memory() /1024.0/1024.0 << " Mbytes" << std::endl;
-        std::cout << " way2nodes " << way2nodes.size() << "" << std::endl;
-
-        std::set<osmium::unsigned_object_id_type> sum_vertices;
-        std::map<osmium::unsigned_object_id_type, size_t>  word_map;
-        int sum_edges {0};
-        for ( auto busit = begin ( alist );
-              busit != end ( alist ); ++busit )
-          {
-
-            sum_vertices.insert ( busit->first );
-            sum_edges+=busit->second.size();
-
-            for ( const auto &v : busit->second )
-              {
-                sum_vertices.insert ( v );
-              }
-
-          }
-        std::cout << " #citymap edges = "<< sum_edges<< std::endl;
-        std::cout << " #citymap vertices = "<< sum_vertices.size() << std::endl;
-        std::cout << " #citymap vertices (deg- >= 1) = "<< alist.size() << std::endl;
-        std::cout << " #onewayc = "<< onewayc<< std::endl;
-
-#endif
-
-        m_estimator *= 8;
-
-      }
-    catch ( std::exception &err )
-      {
-
-        google::protobuf::ShutdownProtobufLibrary();
-        throw;
-      }
-
+    processFile(osmFile);
   }
 
   ~OSMReader()
   {
-
     google::protobuf::ShutdownProtobufLibrary();
-
   }
 
-  std::size_t get_estimated_memory() const
+  void processFile(const char* osmFile)
   {
-    return m_estimator;
+    try
+    {
+      #ifdef DEBUG
+      std::cout << "\n OSMReader is running... " << std::endl;
+      #endif
+
+      osmium::io::File inputFile(osmFile);
+
+      // read everything -> nodes, ways, relations
+      osmium::io::Reader reader(inputFile);
+
+      using SparseLocations =
+        osmium::index::map::SparseMemMap<osmium::unsigned_object_id_type, osmium::Location>;
+
+      osmium::handler::NodeLocationsForWays<SparseLocations> node_locations (locations);
+
+      // starts OSM file processing
+      // we pass ourselves to indicate that we are responsible for the "callbacks"
+      osmium::apply (reader, node_locations, *this);
+
+      reader.close();
+
+      #ifdef DEBUG
+      printStatistics();
+      #endif
+
+      // why?
+      estimatedMemorySize *= 8;
+    }
+    catch ( std::exception &err )
+    {
+      google::protobuf::ShutdownProtobufLibrary();
+
+      throw;
+    }
   }
 
-  inline bool edge ( osmium::unsigned_object_id_type v1, osmium::unsigned_object_id_type v2 )
+  void printStatistics() const
   {
-    return ( std::find ( alist[v1].begin(), alist[v1].end(), v2 ) != alist[v1].end() );
+    // the last thing I'm interested in
+    /*
+    std::cout << " #OSM Nodes: " << nOSM_nodes << "\n";
+    std::cout << " #OSM Highways: " << nOSM_ways << "\n";
+    std::cout << " #Kms (Total length of highways) = " << sum_highhway_length/1000.0 << std::endl;
+    std::cout << " #OSM Relations: " << nOSM_relations << "\n";
+    std::cout << " #Highway Nodes: " << sum_highhway_nodes << "\n";
+    std::cout << " #Unique Highway Nodes: " << sum_unique_highhway_nodes << "\n";
+    std::cout << " E= (#Highway Nodes - #OSM Highways): " << sum_highhway_nodes - nOSM_ways << "\n";
+    std::cout << " V= (#Unique Highway Nodes):" << sum_unique_highhway_nodes << "\n";
+    std::cout << " V^2/E= "
+              <<
+              ( ( long ) sum_unique_highhway_nodes * ( long ) sum_unique_highhway_nodes )
+              / ( double ) ( sum_highhway_nodes - nOSM_ways )
+              << "\n";
+    std::cout << " Edge_multiplicity: " << edge_multiplicity << std::endl;
+    std::cout << " max edle length: " << max_edge_length << std::endl;
+    std::cout << " edle length mean: " << mean_edge_length/cedges << std::endl;
+    std::cout << " cedges: " << cedges << std::endl;
+
+    std::cout << " #Buses = " << busWayNodesMap.size() << std::endl;
+
+    std::cout << " Node locations " << locations.used_memory() /1024.0/1024.0 << " Mbytes" << std::endl;
+    //std::cout << " Waynode locations " << waynode_locations.used_memory() /1024.0/1024.0 << " Mbytes" << std::endl;
+    std::cout << " Vertices " << vert.used_memory() /1024.0/1024.0 << " Mbytes" << std::endl;
+    std::cout << " way2nodes " << way2nodes.size() << "" << std::endl;
+
+    std::set<osmium::unsigned_object_id_type> sum_vertices;
+    std::map<osmium::unsigned_object_id_type, size_t>  word_map;
+    int sum_edges {0};
+    for ( auto busit = begin ( alist );
+          busit != end ( alist ); ++busit )
+      {
+
+        sum_vertices.insert ( busit->first );
+        sum_edges+=busit->second.size();
+
+        for ( const auto &v : busit->second )
+          {
+            sum_vertices.insert ( v );
+          }
+
+      }
+    std::cout << " #citymap edges = "<< sum_edges<< std::endl;
+    std::cout << " #citymap vertices = "<< sum_vertices.size() << std::endl;
+    std::cout << " #citymap vertices (deg- >= 1) = "<< alist.size() << std::endl;
+    std::cout << " #onewayc = "<< onewayc<< std::endl;
+    */
   }
 
-  void node ( osmium::Node& node )
+  std::size_t getEstimatedMemory() const
   {
-    ++nOSM_nodes;
+    return estimatedMemorySize;
   }
 
-  int onewayc {0};
-  int onewayf {false};
-
-  void way ( osmium::Way& way )
+  inline bool hasEdgeBetween(osmium::unsigned_object_id_type a, osmium::unsigned_object_id_type b)
   {
+    const auto& adjList = nodeAdjacencyMap[a];
 
+    return std::find(adjList.cbegin(), adjList.cend(), b) != adjList.cend();
+  }
+
+  // called on each node in the OSM
+  void node(osmium::Node& node)
+  {
+    ++numNodes;
+  }
+
+  int numOneWays {0};
+  int isOneWay {false};
+
+  void way(osmium::Way& way)
+  {
     const char* highway = way.tags() ["highway"];
-    if ( !highway )
-      return;
-    // http://wiki.openstreetmap.org/wiki/Key:highway
-    if ( !strcmp ( highway, "footway" )
-         || !strcmp ( highway, "cycleway" )
-         || !strcmp ( highway, "bridleway" )
-         || !strcmp ( highway, "steps" )
-         || !strcmp ( highway, "path" )
-         || !strcmp ( highway, "construction" ) )
-      return;
 
-    onewayf = false;
-    const char* oneway = way.tags() ["oneway"];
-    if ( oneway )
+    // highway tag does not exist
+    if (highway == nullptr)
+    {
+      return;
+    }
+
+    // we don't want ways with the following highway values to
+    // be processed
+    std::vector<std::string> undesiredValues =
+      { "footway", "cycleway", "bridleway", "steps", "path", "construction" };
+
+    if (std::find(undesiredValues.cbegin(),
+                  undesiredValues.cend(),
+                  std::string(highway)) != undesiredValues.cend())
+    {
+      return;
+    }
+
+    isOneWay = false;
+
+    const char* oneWay = way.tags()["oneway"];
+
+    if (oneWay != nullptr)
+    {
+      isOneWay = true;
+
+      ++numOneWays;
+    }
+
+    ++numWays;
+
+    double wayLength = osmium::geom::haversine::distance (way.nodes());
+
+    sumHighhwayLength += wayLength;
+
+    int numNodeMembers = 0;
+
+    // it's called ..Vertex, because it corresponds to a Vertex in the
+    // graph that will be built from the OSM data
+    // Clearly nodes == vertices, but we use node in an OSM context,
+    // and vertex in the graph context
+    osmium::unsigned_object_id_type previousVertex;
+
+    // loop over all nodes in the current way
+    for (const osmium::NodeRef& nr : way.nodes())
+    {
+      osmium::unsigned_object_id_type currentVertex = nr.positive_ref();
+
+      // a map storing the nodes for each way
+      wayToNode[way.id()].push_back(currentVertex);
+
+      try
       {
-        onewayf = true;
-        ++onewayc;
+        // if the node currently looped over is not found in the map
+        // get() throws an exception
+        nodesEncountered.get(currentVertex);
+      }
+      catch (std::exception& e)
+      {
+        // the value itself is not really important, only that it exists
+        nodesEncountered.set(currentVertex, true);
+
+        ++sumUniqueHighhwayNodes;
+
+        wayNodeLocations[currentVertex] = nr.location();
       }
 
-    ++nOSM_ways;
-
-    double way_length = osmium::geom::haversine::distance ( way.nodes() );
-    sum_highhway_length += way_length;
-
-    int node_counter {0};
-    int unique_node_counter {0};
-    osmium::Location from_loc;
-
-    osmium::unsigned_object_id_type vertex_old;
-
-    for ( const osmium::NodeRef& nr : way.nodes() )
+      // "A way can have between 2 and 2,000 nodes..."
+      // Some faulty ways have 1 or 0 nodes, but we don't care about that
+      // We can be sure, that there will be at least one edge
+      if (numNodeMembers > 0)
       {
+        if (!hasEdgeBetween(previousVertex, currentVertex))
+        {
+          makeEdgeBetween(previousVertex, currentVertex);
+        }
+        else
+        {
+          ++edgeMultiplicity;
+        }
 
-        osmium::unsigned_object_id_type vertex = nr.positive_ref();
-
-        way2nodes[way.id()].push_back ( vertex );
-
-        try
+        // if the current way is not a oneway,
+        // last --- current and current --- last
+        // edges will be created
+        if (!isOneWay)
+        {
+          if (!hasEdgeBetween(currentVertex, previousVertex))
           {
-
-            vert.get ( vertex );
-
+            makeEdgeBetween(currentVertex, previousVertex);
           }
-        catch ( std::exception& e )
+          else
           {
-
-            vert.set ( vertex, 1 );
-
-            ++unique_node_counter;
-
-            //waynode_locations.set ( vertex, nr.location() );
-            waynode_locations[vertex] = nr.location();
-
+            ++edgeMultiplicity;
           }
-
-        if ( node_counter > 0 )
-          {
-
-            if ( !edge ( vertex_old, vertex ) )
-              {
-
-                alist[vertex_old].push_back ( vertex );
-
-                double edge_length = distance ( vertex_old, vertex );
-
-                palist[vertex_old].push_back ( edge_length / 3.0 );
-
-                if ( edge_length>max_edge_length )
-                  max_edge_length = edge_length;
-
-                mean_edge_length += edge_length;
-
-                ++m_estimator;
-                ++cedges;
-
-
-              }
-            else
-              ++edge_multiplicity;
-
-            if ( !onewayf )
-              {
-
-                if ( !edge ( vertex, vertex_old ) )
-                  {
-
-                    alist[vertex].push_back ( vertex_old );
-
-                    double edge_length = distance ( vertex_old, vertex );
-
-                    palist[vertex].push_back ( edge_length / 3.0 );
-
-                    if ( edge_length>max_edge_length )
-                      max_edge_length = edge_length;
-
-                    mean_edge_length += edge_length;
-
-                    ++m_estimator;
-                    ++cedges;
-
-
-                  }
-                else
-                  ++edge_multiplicity;
-
-              }
-
-          }
-
-        vertex_old = vertex;
-
-        ++node_counter;
+        }
       }
 
-    sum_highhway_nodes += node_counter;
-    sum_unique_highhway_nodes  += unique_node_counter;
+      previousVertex = currentVertex;
 
+      ++numNodeMembers;
+    }
+
+    sumHighhwayNodes += numNodeMembers;
   }
 
-  void relation ( osmium::Relation& rel )
+  void relation (osmium::Relation& rel)
   {
+    ++numRelations;
 
-    ++nOSM_relations;
+    // don't care, gonna be rewritten
+    /*
+    const char* bus = rel.tags()["route"];
 
-    const char* bus = rel.tags() ["route"];
-    if ( bus && !strcmp ( bus, "bus" ) )
+    if (bus && !strcmp ( bus, "bus" ) )
       {
 
         ++nbuses;
@@ -348,48 +358,62 @@ public:
               }
           }
 
-      }
+      }*/
   }
 
 protected:
+  int numNodes = 0, numWays = 0, numRelations = 0, numEdges = 0;
 
-  Vertices vert;
-  int nOSM_nodes {0};
-  int nOSM_ways {0};
-  int nOSM_relations {0};
-  int sum_unique_highhway_nodes {0};
-  int sum_highhway_nodes {0};
-  int sum_highhway_length {0};
-  int edge_multiplicity = 0;
-  int nbuses {0};
-  double max_edge_length {0.0};
-  double mean_edge_length {0.0};
-  int cedges {0};
+  int sumUniqueHighhwayNodes = 0, sumHighhwayNodes = 0, sumHighhwayLength = 0;
+
+  int edgeMultiplicity = 0;
+
+  double maxEdgeLength = 0, meanEdgeLength = 0;
+
   OSMLocations  locations;
 
+  osmium::index::map::SparseMemMap<osmium::unsigned_object_id_type, bool> nodesEncountered;
+
 private:
-
-  inline double distance ( osmium::unsigned_object_id_type vertexa, osmium::unsigned_object_id_type vertexb )
+  // Returns the real distance between two nodes identified by their IDs
+  inline double distanceBetween(osmium::unsigned_object_id_type a, osmium::unsigned_object_id_type b)
   {
+    osmium::geom::Coordinates coordA(locations.get(a)),
+                              coordB(locations.get(b));
 
-    osmium::Location A = locations.get ( vertexa );
-    osmium::Location B = locations.get ( vertexb );
-    osmium::geom::Coordinates ac {A};
-    osmium::geom::Coordinates ab {B};
-
-    return osmium::geom::haversine::distance ( ac, ab );
+    return osmium::geom::haversine::distance(coordA, coordB);
   }
 
-  std::size_t m_estimator {0u};
-  AdjacencyList & alist, & palist;
-  WaynodeLocations & waynode_locations;
-  WayNodesMap & busWayNodesMap;
-  Way2Nodes & way2nodes;
+  // makes an edge between two given nodes
+  // manipulates the nodeAdjacencyMap
+  void makeEdgeBetween(osmium::unsigned_object_id_type a, osmium::unsigned_object_id_type b)
+  {
+    nodeAdjacencyMap[a].push_back(b);
 
+    double edgeLength = distanceBetween(b, a);
+
+    palist[a].push_back(edgeLength / 3.0 );
+
+    if (edgeLength > maxEdgeLength)
+    {
+      maxEdgeLength = edgeLength;
+    }
+
+    meanEdgeLength += edgeLength;
+
+    ++estimatedMemorySize;
+
+    ++numEdges;
+  }
+
+  std::size_t estimatedMemorySize = 0u;
+
+  NodeAdjacencyMap &nodeAdjacencyMap, &palist;
+  NodeToLocationMap &wayNodeLocations;
+  WayToNodeMap &busWayMap, &wayToNode;
 };
 
 }
 } // justine::robocar::
 
 #endif // ROBOCAR_OSMREADER_HPP
-

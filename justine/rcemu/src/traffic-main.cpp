@@ -46,7 +46,7 @@ int main(int argc, char* argv[])
   po::options_description desc("Options");
 
   desc.add_options()
-    ("version",  "produce version message")
+    ("version,v",  "produce version message")
     ("help,h",   "produce help message")
     ("config,c", po::value<std::string>()->default_value("traffic.json"),
                  "The file containing the configuration settings");

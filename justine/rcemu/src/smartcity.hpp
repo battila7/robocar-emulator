@@ -32,218 +32,267 @@
 *
 */
 
-#include <osmreader.hpp>
 #include <thread>
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
+#include <exception>
+#include <stdexcept>
+#include <iomanip>
+
 #include <boost/interprocess/managed_shared_memory.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
 #include <boost/interprocess/containers/map.hpp>
 #include <boost/interprocess/containers/vector.hpp>
 #include <boost/interprocess/containers/string.hpp>
 
-#include <exception>
-#include <stdexcept>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/json_parser.hpp>
 
-#include <iomanip>
+#include "osmreader.hpp"
 
 namespace justine
 {
+
 namespace robocar
 {
+  // too long, too ugly -> enough said
+  namespace bip = boost::interprocess;
 
-  typedef boost::interprocess::managed_shared_memory::segment_manager segment_manager_Type;
-  typedef boost::interprocess::allocator<void, segment_manager_Type> void_allocator;
-  typedef boost::interprocess::allocator<unsigned int, segment_manager_Type> uint_allocator;
-  typedef boost::interprocess::vector<unsigned int, uint_allocator> uint_vector;
-  typedef boost::interprocess::allocator<uint_vector, segment_manager_Type> uint_vector_allocator;
+  // generic interprocess allocation stuff
+  using SegmentManager = bip::managed_shared_memory::segment_manager;
+  using VoidAllocator = bip::allocator<void, SegmentManager>;
+
+  // unsigned int vector stuff
+  using UIntAllocator = bip::allocator<unsigned int, SegmentManager>;
+  using UIntVector = bip::vector<unsigned int, UIntAllocator>;
+  using UIntVectorAllocator = bip::allocator<UIntVector, SegmentManager>;
+
 
   class SharedData
   {
   public:
-    uint_vector m_alist;
-    uint_vector m_salist;
-    uint_vector m_palist;
+    UIntVector m_alist;
+    UIntVector m_salist;
+    UIntVector m_palist;
 
-    int lon;
-    int lat;
+    int lon, lat;
 
-    SharedData ( const void_allocator &void_alloc )
-    :  m_alist ( void_alloc ), m_salist ( void_alloc ), m_palist ( void_alloc )
+    SharedData (const VoidAllocator &voidAlloc):
+     m_alist(voidAlloc), m_salist(voidAlloc), m_palist (voidAlloc)
     {}
-
   };
 
-  typedef std::pair<const unsigned int, SharedData> map_pair_Type;
-  typedef boost::interprocess::allocator<map_pair_Type, segment_manager_Type> map_pair_Type_allocator;
-  typedef boost::interprocess::map< unsigned int, SharedData, std::less<unsigned int>,
-  map_pair_Type_allocator> shm_map_Type;
+  // graph data interprocess container stuff
+  using SharedMapPair = std::pair<const unsigned int, SharedData>;
+  using SharedMapPairAllocator = bip::allocator<SharedMapPair, SegmentManager>;
+  using SharedMap =
+    bip::map<unsigned int, SharedData, std::less<unsigned int>, SharedMapPairAllocator>;
 
   class SmartCity
   {
   public:
-    SmartCity ( const char * osm_file, const char * shm_segment, const char * map_file ) : SmartCity ( osm_file, shm_segment )
+    SmartCity(std::string config):
+      configFile(config)
     {
-      std::fstream gpsFile ( map_file, std::ios_base::out );
+      ProcessConfigFile();
 
-      for ( auto loc: m_waynode_locations )
+      CreateSharedMemory();
+
+      if (mapSettings.nodeToGpsFile != "")
+      {
+        BuildNodeToGpsFile();
+      }
+
+      std::cout << "\t" << mapSettings.cityName << " is ready." << std::endl;
+    }
+
+    void ProcessConfigFile()
+    {
+      namespace pt = boost::property_tree;
+
+      std::cout << "\tReading config file: " << configFile
+                << std::endl;
+
+      pt::ptree propTree;
+
+      pt::read_json(configFile, propTree);
+
+      shmSegmentName =
+        propTree.get("connectivity.shm", "JustineSharedMemory");
+
+      mapSettings.osmFile =
+        propTree.get("map.osmFile", "debrecen.osm");
+      mapSettings.cityName =
+        propTree.get("map.cityName", "Debrecen");
+      mapSettings.nodeToGpsFile =
+        propTree.get("map.nodeToGpsFile", "");
+    }
+
+    void BuildNodeToGpsFile()
+    {
+      // output Node ID Latitude Longitude data into the GPS file
+      // the file can be used by the rcwin (or similar) display processes
+      std::fstream gpsFile(mapSettings.nodeToGpsFile, std::ios_base::out);
+
+      for (const auto& loc : waynodeLocations)
       {
         gpsFile << loc.first
                 << " " << loc.second.lat()
-                <<  " " << loc.second.lon() << std::endl;
+                << " " << loc.second.lon()
+                << std::endl;
       }
 
-      gpsFile.close ();
+      gpsFile.close();
+
+      std::cout << "\tNodeToGPS file built: " << mapSettings.nodeToGpsFile
+                << std::endl;
     }
 
-    SmartCity ( const char * osm_file, const char * shm_segment )
+    void CreateSharedMemory()
     {
-      AdjacencyList alist, palist;
+      NodeAdjacencyMap adjacencyList, palist;
 
-      std::size_t estimated_size;
+      std::size_t estimatedSize;
 
       try
       {
-        #ifdef DEBUG
-        auto start = std::chrono::high_resolution_clock::now();
-        #endif
+        std::cout << "\tProcessing OSM file: " << mapSettings.osmFile
+                  << std::endl;
 
-        OSMReader osm_reader ( osm_file, alist, palist,
-          m_waynode_locations,
-          m_busWayNodesMap,
-          m_way2nodes );
-          estimated_size = 20*3*osm_reader.get_estimated_memory();
+        OSMReader osmReader(mapSettings.osmFile.c_str(), adjacencyList, palist,
+                            waynodeLocations, buswayNodesMap,
+                            wayToNodes);
 
-        #ifdef DEBUG
-        std::cout << " Processing OSM: "
-                  << std::chrono::duration_cast<std::chrono::milliseconds> (
-                      std::chrono::high_resolution_clock::now() - start ).count()
-                  << " ms " << std::endl;
-        #endif
+        estimatedSize = 20 * 3 * osmReader.getEstimatedMemory();
       }
-      catch ( std::exception &err )
+      catch (std::exception &err) //TODO: More specific exception
       {
-        m_cv.notify_one();
+        osmLoadedCondVar.notify_one();
 
-        m_run = false;
-        m_thread.join();
+        isRunning = false;
+
+        thread.join();
 
         throw;
       }
 
       google::protobuf::ShutdownProtobufLibrary();
 
-      m_remover = new shm_remove ( shm_segment );
+      // If there was a previously created shared memory segment with the same
+      // name, it will be deleted
+      // It returns true upon deletion but we really don't care
+      bip::shared_memory_object::remove(shmSegmentName.c_str());
 
-      segment = new boost::interprocess::managed_shared_memory (
-        boost::interprocess::create_only,
-        shm_segment,
-        estimated_size );
+      std::cout << "\tCreating shared memory segment: " << shmSegmentName
+                << std::endl;
 
-      void_allocator  alloc_obj ( segment->get_segment_manager() );
+      shmSegment =
+        new bip::managed_shared_memory(bip::create_only, shmSegmentName.c_str(), estimatedSize);
 
-      shm_map_Type* shm_map_n =
-      segment->construct<shm_map_Type>
-      ( "JustineMap" ) ( std::less<unsigned int>(), alloc_obj );
+      VoidAllocator  allocatorObject(shmSegment->get_segment_manager());
+
+      SharedMap* sharedMap =
+        shmSegment->construct<SharedMap>("JustineMap")(std::less<unsigned int>(), allocatorObject);
 
       try
       {
-
-        for ( AdjacencyList::iterator iter=alist.begin();
-              iter!=alist.end(); ++iter )
+        // We cycle through the nodes and fill up the
+        // shared data objects
+        // Then we put this stuff into the shared memory
+        // first - ID, second - the real adjacency list
+        for (const auto& node : adjacencyList)
         {
+          SharedData sharedData(allocatorObject);
 
-          SharedData v ( alloc_obj );
+          sharedData.lon = waynodeLocations[node.first].x();
+          sharedData.lat = waynodeLocations[node.first].y();
 
-          /*
-          v.lon = m_waynode_locations.get ( iter->first ).x();
-          v.lat = m_waynode_locations.get ( iter->first ).y();
-          */
+          std::size_t i = 0;
 
-          v.lon = m_waynode_locations[ iter->first ].x();
-          v.lat = m_waynode_locations[ iter->first ].y();
-
-          for ( WayNodesVect::iterator noderefi = iter->second.begin();
-                noderefi!= iter->second.end(); ++noderefi )
+          for (const osmium::unsigned_object_id_type adjacentNodeId: node.second)
           {
-            v.m_alist.push_back ( *noderefi );
-            v.m_salist.push_back ( 0u );
-            v.m_palist.push_back (
-              palist[iter->first][std::distance ( iter->second.begin(), noderefi )]+1 );
+            sharedData.m_alist.push_back(adjacentNodeId);
+            sharedData.m_salist.push_back(0u);
+            sharedData.m_palist.push_back(palist[node.first][i] + 1);
+
+            i++;
           }
 
-          map_pair_Type p ( iter->first, v );
-          shm_map_n->insert ( p );
+          SharedMapPair mapPair(node.first, sharedData);
+
+          sharedMap->insert(mapPair);
         }
 
         #ifdef DEBUG
-        std::cout << " alist.size = " << alist.size() << " (deg- >= 1)"<< std::endl;
-        std::cout << " SHM/alist.size = " << shm_map_n->size() << std::endl;
+        std::cout << " adjacencyList.size = " << adjacencyList.size() << " (deg- >= 1)"<< std::endl;
+        std::cout << " SharedMap/alist.size = " << sharedMap->size() << std::endl;
         #endif
       }
-      catch ( boost::interprocess::bad_alloc e )
+      catch (boost::interprocess::bad_alloc e)
       {
-        std::cerr << " Out of shared memory..." << std::cerr;
-        std::cout << e.what() <<std::endl;
+        std::cerr << " Out of shared memory..." << std::endl
+                  << e.what() << std::endl;
 
         std::cerr
-          << " Shared memory usage: "
-          << segment->get_free_memory() /1024.0/1024.0 << " Mbytes "
-          << std::setprecision ( 2 )
-          << 100.0- ( 100.0*segment->get_free_memory() ) /segment->get_size()
+          << "Shared memory usage: "
+          << shmSegment->get_free_memory() / std::pow(1024, 2) << " Mbytes "
+          << std::setprecision (2)
+          << 100.0 - (100.0 * shmSegment->get_free_memory()) / shmSegment->get_size()
           << "% is free"
           << std::endl;
 
-        m_cv.notify_one();
+        osmLoadedCondVar.notify_one();
 
-        m_run = false;
-        m_thread.join();
+        isRunning = false;
+        thread.join();
 
         throw e;
       }
 
       #ifdef DEBUG
-      std::streamsize p = std::cout.precision();
-
       std::cout
-        << " Shared memory usage: "
-        << segment->get_free_memory() /1024.0/1024.0 << " Mbytes "
-        << std::setprecision ( 2 )
-        << 100.0- ( 100.0*segment->get_free_memory() ) /segment->get_size()
+        << "Shared memory usage: "
+        << shmSegment->get_free_memory() / std::pow(1024, 2) << " Mbytes "
+        << std::setprecision (2)
+        << 100.0 - (100.0 * shmSegment->get_free_memory()) / shmSegment->get_size()
         << "% is free"
-        << std::setprecision ( p )
         << std::endl;
       #endif
 
-      shm_map = segment->find<shm_map_Type> ( "JustineMap" ).first;
+      sharedMapOffsetPtr = shmSegment->find<SharedMap> ( "JustineMap" ).first;
 
-      m_cv.notify_one();
+      osmLoadedCondVar.notify_one();
     }
 
     ~SmartCity()
     {
-      m_run = false;
-      m_thread.join();
+      isRunning = false;
 
-      delete segment;
-      delete m_remover;
+      thread.join();
+
+      delete shmSegment;
+
+      bip::shared_memory_object::remove(shmSegmentName.c_str());
     }
 
-    void processes ( )
+    void processes()
     {
-      std::unique_lock<std::mutex> lk ( m_mutex );
-      m_cv.wait ( lk );
+      std::unique_lock<std::mutex> lock(mutex);
 
-      for ( ; m_run; )
+      osmLoadedCondVar.wait(lock);
+
+      while (isRunning)
       {
-        std::this_thread::sleep_for ( std::chrono::milliseconds ( m_delay ) );
-        city_run();
+        std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+
+        cityRun();
       }
     }
 
-    friend std::ostream & operator<< ( std::ostream & os, SmartCity & t )
+    void Serialize()
     {
+      /*
       for ( shm_map_Type::iterator iter=t.shm_map->begin();
             iter!=t.shm_map->end(); ++iter )
       {
@@ -281,51 +330,45 @@ namespace robocar
         std::cout << std::endl;
       }
 
-      return os;
+      return os;*/
     }
 
-    virtual void city_run()
+    virtual void cityRun()
     {
-
       // activities that may occur in the city
 
       // std::cout << *this;
-
     }
 
-    double busWayLength ( bool verbose );
+    double busWayLength (bool verbose);
 
   protected:
-    boost::interprocess::managed_shared_memory *segment;
-    boost::interprocess::offset_ptr<shm_map_Type> shm_map;
+    struct MapSettings {
+      std::string osmFile, cityName, nodeToGpsFile;
+    };
 
-    int m_delay {5000};
-    bool m_run {true};
+    MapSettings mapSettings;
+
+    std::string shmSegmentName, configFile;
+
+    bip::managed_shared_memory* shmSegment;
+    bip::offset_ptr<SharedMap> sharedMapOffsetPtr;
+
+    int delay = 5000;
+    bool isRunning = true;
 
   private:
-    std::mutex m_mutex;
-    std::condition_variable m_cv;
-    std::thread m_thread {&SmartCity::processes, this};
+    std::mutex mutex;
+    std::condition_variable osmLoadedCondVar;
+    std::thread thread {&SmartCity::processes, this};
 
-    WaynodeLocations m_waynode_locations;
-    WayNodesMap m_busWayNodesMap;
-    Way2Nodes m_way2nodes;
-
-    struct shm_remove
-    {
-      const char * name;
-      shm_remove ( const char * name )
-      {
-        boost::interprocess::shared_memory_object::remove ( name );
-      }
-      ~shm_remove()
-      {
-        boost::interprocess::shared_memory_object::remove ( name );
-      }
-    } * m_remover;
+    NodeToLocationMap waynodeLocations;
+    WayToNodeMap buswayNodesMap;
+    WayToNodeMap wayToNodes;
   };
 
 }
+
 } // justine::robocar::
 
 

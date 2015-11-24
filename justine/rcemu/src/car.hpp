@@ -170,8 +170,8 @@ public:
   osmium::unsigned_object_id_type ant_rernd ( void );
   osmium::unsigned_object_id_type ant_mrernd ( void );
 
-  static AdjacencyList alist;
-  static AdjacencyList alist_evaporate;
+  static NodeAdjacencyMap alist;
+  static NodeAdjacencyMap alist_evaporate;
 
 private:
   bool rnd {true};
@@ -216,8 +216,8 @@ virtual void step();
   osmium::unsigned_object_id_type ped_rernd ( void );
   osmium::unsigned_object_id_type ped_mrernd ( void );
 
-  static AdjacencyList plist;
-  static AdjacencyList plist_evaporate;
+  static NodeAdjacencyMap plist;
+  static NodeAdjacencyMap plist_evaporate;
 
 private:
   bool rnd {true};

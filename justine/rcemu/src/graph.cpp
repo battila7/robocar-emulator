@@ -4,7 +4,7 @@ using GraphNodeID = osmium::unsigned_object_id_type;
 
  GraphNodeID justine::sampleclient::Graph::palist ( GraphNodeID from, int to ) const
  {
-    justine::robocar::shm_map_Type::iterator iter=shm_map->find ( from );
+    justine::robocar::SharedMap::iterator iter=shm_map->find ( from );
     return iter->second.m_palist[to];
  }
 
@@ -14,7 +14,7 @@ void justine::sampleclient::Graph::BuildGraph(void)
   	std::map<GraphNodeID, NRGVertex>::iterator it;
   	NRGVertex f, t;
 
-  	for(justine::robocar::shm_map_Type::iterator iter = shm_map->begin(); iter!=shm_map->end(); ++iter){
+  	for(justine::robocar::SharedMap::iterator iter = shm_map->begin(); iter!=shm_map->end(); ++iter){
 
     	GraphNodeID u = iter->first;
       	it = nr2v.find(u);
@@ -23,8 +23,8 @@ void justine::sampleclient::Graph::BuildGraph(void)
         	nr2v[u] = f;}
       	else{f = it->second;}
 
-	    for(justine::robocar::uint_vector::iterator noderefi = iter->second.m_alist.begin(); noderefi != iter->second.m_alist.end(); ++noderefi){
-	      	
+	    for(justine::robocar::UIntVector::iterator noderefi = iter->second.m_alist.begin(); noderefi != iter->second.m_alist.end(); ++noderefi){
+
 	      	it = nr2v.find(*noderefi);
 	      	if(it == nr2v.end()){
 	        	t = boost::add_vertex(*noderefi, *nrg);

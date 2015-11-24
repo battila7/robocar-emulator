@@ -61,7 +61,7 @@ void justine::robocar::Traffic::InitializeRoutineCars(void)
 
   if (simulationSettings.trafficType != TrafficType::NORMAL)
   {
-    for (shm_map_Type::iterator iter=shm_map_->begin();
+    for (SharedMap::iterator iter=shm_map_->begin();
          iter!=shm_map_->end();
          ++iter)
     {
@@ -104,7 +104,7 @@ void justine::robocar::Traffic::InitializePedestrians(void)
 
   if (simulationSettings.trafficType != TrafficType::NORMAL)
   {
-    for (shm_map_Type::iterator iter=shm_map_->begin();
+    for (SharedMap::iterator iter=shm_map_->begin();
          iter!=shm_map_->end();
          ++iter)
     {
@@ -192,7 +192,7 @@ std::string justine::robocar::Traffic::get_title(std::string name)
 
 osmium::unsigned_object_id_type justine::robocar::Traffic::node()
 {
-  shm_map_Type::iterator iter=shm_map_->begin();
+  SharedMap::iterator iter=shm_map_->begin();
   std::advance(iter, std::rand() % shm_map_->size());
 
   return iter->first;
@@ -275,23 +275,23 @@ void justine::robocar::Traffic::CheckIfCaught(void)
 
 size_t justine::robocar::Traffic::nedges(osmium::unsigned_object_id_type from) const
 {
-  shm_map_Type::iterator iter=shm_map_->find(from);
+  SharedMap::iterator iter=shm_map_->find(from);
   return iter->second.m_alist.size();
 }
 
 osmium::unsigned_object_id_type justine::robocar::Traffic::alist(osmium::unsigned_object_id_type from, int to) const
 {
-  shm_map_Type::iterator iter=shm_map_->find(from);
+  SharedMap::iterator iter=shm_map_->find(from);
   return iter->second.m_alist[to];
 }
 
 int justine::robocar::Traffic::alist_inv(osmium::unsigned_object_id_type from, osmium::unsigned_object_id_type to) const
 {
-  shm_map_Type::iterator iter=shm_map_->find(from);
+  SharedMap::iterator iter=shm_map_->find(from);
 
   int ret = -1;
 
-  for(uint_vector::iterator noderefi = iter->second.m_alist.begin();
+  for(UIntVector::iterator noderefi = iter->second.m_alist.begin();
         noderefi!=iter->second.m_alist.end();
         ++noderefi)
   {
@@ -307,25 +307,25 @@ int justine::robocar::Traffic::alist_inv(osmium::unsigned_object_id_type from, o
 
 osmium::unsigned_object_id_type justine::robocar::Traffic::salist(osmium::unsigned_object_id_type from, int to) const
 {
-  shm_map_Type::iterator iter=shm_map_->find(from);
+  SharedMap::iterator iter=shm_map_->find(from);
   return iter->second.m_salist[to];
 }
 
 void justine::robocar::Traffic::set_salist(osmium::unsigned_object_id_type from, int to , osmium::unsigned_object_id_type value)
 {
-  shm_map_Type::iterator iter=shm_map_->find(from);
+  SharedMap::iterator iter=shm_map_->find(from);
   iter->second.m_salist[to] = value;
 }
 
 osmium::unsigned_object_id_type justine::robocar::Traffic::palist(osmium::unsigned_object_id_type from, int to) const
 {
-  shm_map_Type::iterator iter=shm_map_->find(from);
+  SharedMap::iterator iter=shm_map_->find(from);
   return iter->second.m_palist[to];
 }
 
 bool justine::robocar::Traffic::hasNode(osmium::unsigned_object_id_type node)
 {
-  shm_map_Type::iterator iter=shm_map_->find(node);
+  SharedMap::iterator iter=shm_map_->find(node);
   return !(iter == shm_map_->end());
 }
 
@@ -336,7 +336,7 @@ std::ostream & justine::robocar::operator<<(std::ostream & os, Traffic & t)
      t.shm_map_->size()
      << std::endl;
 
-  for(shm_map_Type::iterator iter=t.shm_map_->begin();
+  for(SharedMap::iterator iter=t.shm_map_->begin();
         iter!=t.shm_map_->end(); ++iter)
   {
     os  << iter->first
@@ -885,8 +885,8 @@ double justine::robocar::Traffic::Distance(
   osmium::unsigned_object_id_type n2) const
 {
 
-  shm_map_Type::iterator iter1=shm_map_->find(n1);
-  shm_map_Type::iterator iter2=shm_map_->find(n2);
+  SharedMap::iterator iter1=shm_map_->find(n1);
+  SharedMap::iterator iter2=shm_map_->find(n2);
 
   osmium::geom::Coordinates c1 {iter1->second.lon/10000000.0, iter1->second.lat/10000000.0};
   osmium::geom::Coordinates c2 {iter2->second.lon/10000000.0, iter2->second.lat/10000000.0};
@@ -908,10 +908,10 @@ void justine::robocar::Traffic::toGPS(
   osmium::unsigned_object_id_type to,
   osmium::unsigned_object_id_type step, double *lo, double *la) const
 {
-  shm_map_Type::iterator iter1=shm_map_->find(from);
+  SharedMap::iterator iter1=shm_map_->find(from);
   double lon1 {iter1->second.lon/10000000.0}, lat1 {iter1->second.lat/10000000.0};
 
-  shm_map_Type::iterator iter2=shm_map_->find(alist(from, to));
+  SharedMap::iterator iter2=shm_map_->find(alist(from, to));
   double lon2 {iter2->second.lon/10000000.0}, lat2 {iter2->second.lat/10000000.0};
 
   osmium::unsigned_object_id_type maxstep = palist(from, to);
@@ -970,11 +970,11 @@ osmium::unsigned_object_id_type justine::robocar::Traffic::naive_node_for_neares
 
   osmium::unsigned_object_id_type car = naive_nearest_gangster(from, to , step);
 
-  shm_map_Type::iterator iter=shm_map_->find(from);
+  SharedMap::iterator iter=shm_map_->find(from);
 
   double maxd = std::numeric_limits<double>::max();
 
-  for(uint_vector::iterator noderefi = iter->second.m_alist.begin();
+  for(UIntVector::iterator noderefi = iter->second.m_alist.begin();
         noderefi!=iter->second.m_alist.end(); ++noderefi)
   {
     double d = Distance(car, *noderefi);

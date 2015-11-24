@@ -1,0 +1,10 @@
+{
+  "connectivity": {
+    "shm" : "JustineSharedMemory"
+  },
+  "map" : {
+    "osmFile"       : "../debrecen.osm",
+    "cityName"      : "Debrecen",
+    "nodeToGpsFile" : "../debrecen.lmap"
+  }
+}

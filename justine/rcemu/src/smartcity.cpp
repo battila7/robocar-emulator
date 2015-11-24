@@ -41,7 +41,7 @@
 double justine::robocar::SmartCity::busWayLength ( bool verbose )
 {
 
-  double sum_bus_length {0.0};
+  /*double sum_bus_length {0.0};
   for ( auto busit = begin ( m_busWayNodesMap );
         busit != end ( m_busWayNodesMap ); ++busit )
   {
@@ -87,30 +87,29 @@ double justine::robocar::SmartCity::busWayLength ( bool verbose )
     if ( verbose )
       std::cout << ( sum_bus_length-bus_length ) /1000.0 << " km"<< std::endl;
   }
-
-  return sum_bus_length/1000.0;
+*/
+  return 0.0;
 }
 
-int main ( int argc, char* argv[] )
+int main (int argc, char* argv[])
 {
-  boost::program_options::options_description desc ( "Options" );
+  namespace po = boost::program_options;
+
+  po::options_description desc("Options");
+
   desc.add_options()
-  ( "version", "produce version message" )
-  ( "help", "produce help message" )
-  ( "osm", boost::program_options::value< std::string > (), "OSM file name" )
-  ( "city", boost::program_options::value< std::string > (), "the name of the city" )
-  ( "shm", boost::program_options::value< std::string > (), "shared memory segment name" )
-  ( "node2gps", boost::program_options::value< std::string > (), "node2gps file name" )
-  ;
+    ("version,v","produce version message")
+    ("help,h",   "produce help message")
+    ("config,c", po::value<std::string>()->default_value("smartcity.json"),
+                 "The file containing the configuration settings");
 
-  boost::program_options::variables_map vm;
+  po::variables_map vm;
 
-  boost::program_options::store (
-    boost::program_options::parse_command_line ( argc, argv, desc ), vm );
+  po::store(po::parse_command_line(argc, argv, desc), vm);
 
-  boost::program_options::notify ( vm );
+  po::notify(vm);
 
-  if ( vm.count ( "version" ) )
+  if (vm.count("version"))
   {
     std::cout << "Robocar City Emulator and Robocar World Championship, City Server" << std::endl
               << "Copyright (C) 2014, 2015 Norbert Bátfai\n" << std::endl
@@ -121,7 +120,7 @@ int main ( int argc, char* argv[] )
     return 0;
   }
 
-  if ( vm.count ( "help" ) )
+  if (vm.count("help"))
   {
     std::cout << "Robocar City Emulator and Robocar World Championship home page: https://code.google.com/p/robocar-emulator/" << std::endl
               << desc << std::endl
@@ -130,9 +129,7 @@ int main ( int argc, char* argv[] )
     return 0;
   }
 
-  std::string osm_input;
-  
-  if ( vm.count ( "osm" ) )
+  /*if ( vm.count ( "osm" ) )
     osm_input.assign ( vm["osm"].as < std::string > () );
   else
     osm_input.assign ( "../debrecen.osm" );
@@ -156,7 +153,7 @@ int main ( int argc, char* argv[] )
   if ( vm.count ( "shm" ) )
     shm.assign ( vm["shm"].as < std::string > () );
   else
-    shm.assign ( "JustineSharedMemory" );
+    shm.assign ( "JustineSharedMemory" );*/
 
   // Do not remove this copyright notice!
   std::cout << "Robocar City Emulator and Robocar World Championship, City Server" << std::endl
@@ -165,22 +162,24 @@ int main ( int argc, char* argv[] )
             << "This is free software: you are free to change and redistribute it." << std::endl
             << "There is NO WARRANTY, to the extent permitted by law." << std::endl;
 
-  std::cout << city << " is... " << std::flush;
   try
   {
-    if ( vm.count ( "node2gps" ) )
-      justine::robocar::SmartCity smartCity ( osm_input.c_str(), shm.c_str(), node2gps_output.c_str() );
+    std::string configFile = vm["config"].as<std::string>();
+
+    justine::robocar::SmartCity smartCity(configFile);
+
+    /*if ( vm.count ( "node2gps" ) )
+      justine::robocar::SmartCity smartCity ( osm_input.c_str(), shm, node2gps_output.c_str() );
     else
-      justine::robocar::SmartCity smartCity ( osm_input.c_str(), shm.c_str() );
+      justine::robocar::SmartCity smartCity ( osm_input.c_str(), shm );*/
 
-    std::cout << "ready."<<  std::endl;
-
-    for ( ;; );
-
+    for (;;);
   }
   catch ( std::exception &err )
   {
-    std::cout << "SmartCity cannot be built for "+city << std::endl;
+    std::cout << "Something went wrong. Please refer to the following message:"
+              << std::endl;
+
     std::cout << err.what() <<std::endl;
   }
 }

@@ -51,8 +51,8 @@ using EdgeWeightMap = boost::property_map<NodeRefGraph, boost::edge_weight_t>::t
 
 	double justine::sampleclient::ExtendedGraph::getDistance(GraphNodeID n1, GraphNodeID n2)
 	{
-		justine::robocar::shm_map_Type::iterator iter1=shm_map->find ( n1 );
-	    justine::robocar::shm_map_Type::iterator iter2=shm_map->find ( n2 );
+		justine::robocar::SharedMap::iterator iter1=shm_map->find ( n1 );
+	    justine::robocar::SharedMap::iterator iter2=shm_map->find ( n2 );
 
 	    if(iter1==shm_map->end()){
 	    	VertexNameMap vertexNameMap = getVertexNameMap();
@@ -81,7 +81,7 @@ using EdgeWeightMap = boost::property_map<NodeRefGraph, boost::edge_weight_t>::t
 
 	std::vector<GraphNodeID> justine::sampleclient::ExtendedGraph::DetermineDijkstraPath(GraphNodeID from, GraphNodeID to)
 	{
-	
+
     std::vector<NRGVertex> parents ( boost::num_vertices ( *nrg ) );
     std::vector<int> distances ( boost::num_vertices ( *nrg ) );
 
